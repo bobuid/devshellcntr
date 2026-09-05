@@ -1,0 +1,17 @@
+[modules.devshell]
+source = "asrc/devshell"
+
+[modules.devshell.settings]
+baseImage = "debian:forky-slim"
+# auto follows the engine; use amd64 or arm64 to select a Linux target explicitly.
+arch = "auto"
+imageName = "devshell"
+userName = "bob"
+userId = 501
+userGroupName = "bobz"
+userGroupId20 = 20
+workRootPath = "/work"
+extraAptPackages = []
+egetPackages = []
+# Change this value to refresh the latest eget, mise, and mise-managed tools.
+toolRefresh = ""

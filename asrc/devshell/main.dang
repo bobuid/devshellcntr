@@ -1,0 +1,204 @@
+"""
+Build and use a Debian development shell with eget and mise-managed tools.
+Configuration is supplied through dagger.toml settings or constructor arguments.
+"""
+type Devshell {
+  baseImage: String!
+  arch: String!
+  imageName: String!
+  userName: String!
+  userId: Int!
+  userGroupName: String!
+  userGroupId20: Int!
+  workRootPath: String!
+  workFolderPath: String!
+  userHomePath: String!
+  userBinPath: String!
+  sshAgentPath: String!
+  baseAptPackages: [String!]!
+  extraAptPackages: [String!]!
+  egetPackages: [String!]!
+  toolRefresh: String!
+
+  new(
+    baseImage: String! = "debian:forky-slim",
+    """
+    auto uses the engine architecture; explicit targets are amd64 and arm64.
+    """
+    arch: String! = "auto",
+    imageName: String! = "devshell",
+    userName: String! = "bob",
+    userId: Int! = 501,
+    userGroupName: String! = "bobz",
+    """
+    Primary GID, retained from the original module; the named group is supplementary.
+    """
+    userGroupId20: Int! = 20,
+    workRootPath: String! = "/work",
+    workFolderPath: String! = "",
+    userHomePath: String! = "",
+    userBinPath: String! = "",
+    sshAgentPath: String! = "",
+    baseAptPackages: [String!]! = [
+      "sudo", "curl", "xz-utils", "bash", "zsh", "bat",
+      "openssh-client", "ca-certificates",
+    ],
+
+    extraAptPackages: [String!]! = [],
+    """
+    Additional owner/repository names to install with eget, without shell arguments.
+    """
+    egetPackages: [String!]! = [],
+    """
+    Change to invalidate only tool installation layers and resolve latest releases again.
+    """
+    toolRefresh: String! = "",
+  ) {
+    if (!["auto", "amd64", "arm64"].contains(arch)) {
+      raise "arch must be auto, amd64, or arm64"
+    }
+    if (userId <= 0 or userGroupId20 <= 0) {
+      raise "userId and userGroupId20 must be positive"
+    }
+    if (!userName.containsMatch(`^[a-z_][a-z0-9_-]*$`) or !userGroupName.containsMatch(`^[a-z_][a-z0-9_-]*$`)) {
+      raise "userName and userGroupName must be valid Linux account names"
+    }
+    self.baseImage = baseImage
+    self.arch = arch
+    self.imageName = imageName
+    self.userName = userName
+    self.userId = userId
+    self.userGroupName = userGroupName
+    self.userGroupId20 = userGroupId20
+    self.workRootPath = workRootPath
+    self.workFolderPath = if (workFolderPath == "") { workRootPath + "/app" } else { workFolderPath }
+    self.userHomePath = if (userHomePath == "") { self.workFolderPath + "/." + userName } else { userHomePath }
+    self.userBinPath = if (userBinPath == "") { workRootPath + "/bin" } else { userBinPath }
+    self.sshAgentPath = if (sshAgentPath == "") { self.userHomePath + "/.ssh-agent.socket" } else { sshAgentPath }
+    self.baseAptPackages = baseAptPackages
+    self.extraAptPackages = extraAptPackages
+    self.egetPackages = egetPackages
+    self.toolRefresh = toolRefresh
+    self
+  }
+
+  # Assets belong to this module, not to the caller's application or home directory.
+  let assets = currentModule.source.directory("assets")
+
+  let targetArch(requested: String!): String! {
+    if (requested == "amd64" or requested == "arm64") {
+      return requested
+    }
+    if (requested != "auto") {
+      raise "architecture must be auto, amd64, or arm64"
+    }
+    let native = container.platform
+    if (native == "linux/amd64") { return "amd64" }
+    if (native == "linux/arm64" or native == "linux/arm64/v8") { return "arm64" }
+    raise `unsupported engine platform: ${native}; choose amd64 or arm64 explicitly`
+  }
+
+  let build(target: String!): Container! {
+    let selected = targetArch(target)
+    # Filter version/architecture-qualified Debian package requests too. A package
+    # option or path is rejected before apt sees it; settings never become shell code.
+    let managed = ["fzf", "fd", "fd-find", "eza", "yazi", "ripgrep", "rg"]
+    let packages = (baseAptPackages + extraAptPackages).filter { pkg =>
+      if (!pkg.containsMatch(`^[a-z0-9][a-z0-9+.-]*(:[a-z0-9]+)?(=[A-Za-z0-9.+:~_-]+)?$`)) {
+        raise `invalid apt package: ${pkg}`
+      }
+      !managed.contains(pkg.split("=")[0].split(":")[0])
+    }
+    let env = container(platform: `linux/${selected}`)
+      .from(baseImage)
+      .withEnvVariable("DEBIAN_FRONTEND", "noninteractive")
+      .withExec(["apt-get", "update"])
+      .withExec(["apt-get", "install", "-y", "--no-install-recommends"] + packages)
+      .withExec(["sh", "-eu", "-c", "rm -rf /var/lib/apt/lists/*"])
+      .withoutEnvVariable("DEBIAN_FRONTEND")
+      .withDirectory("/usr/local/share/devshell", assets)
+      .withExec([
+        "bash", "/usr/local/share/devshell/setup-user.sh",
+        userName, `${userId}`, userGroupName, `${userGroupId20}`,
+        workRootPath, workFolderPath, userHomePath, userBinPath,
+      ])
+      .withUser(userName)
+      .withEnvVariable("HOME", userHomePath)
+      .withEnvVariable("DEVSHELL_BIN", userBinPath)
+      .withEnvVariable("SSH_AUTH_SOCK", sshAgentPath)
+      .withEnvVariable(
+        "PATH",
+        userBinPath + ":" + userHomePath + "/.local/share/mise/shims:$PATH",
+        expand: true,
+      )
+      .withWorkdir(workFolderPath)
+      # This input deliberately enters after apt/account setup. No shared cache
+      # mount holds installed executables: they must survive image export.
+      .withEnvVariable("DEVSHELL_TOOL_REFRESH", toolRefresh)
+      .withExec(["bash", "/usr/local/share/devshell/install-tools.sh", selected] + egetPackages)
+      .withoutEnvVariable("DEVSHELL_TOOL_REFRESH")
+      .withExec(["bash", "/usr/local/share/devshell/init-shells.sh"])
+      .withEntrypoint(["bash", "/usr/local/share/devshell/entrypoint.sh"])
+      .withDefaultArgs([])
+      .withDefaultTerminalCmd(["bash", "/usr/local/share/devshell/entrypoint.sh", "zsh"])
+    env
+  }
+
+  """
+  Return the configured development container, ready for further Dagger operations.
+  """
+  devContainer: Container! { build(arch) }
+
+  """
+  Execute argv directly, without shell interpolation, and return the evaluated container.
+  """
+  run(args: [String!]!): Container! {
+    if (args.length == 0) { raise "run requires a nonempty argument array" }
+    devContainer.withExec(args, useEntrypoint: true).sync
+  }
+
+  """
+  Open an interactive zsh or bash session. Terminal changes are session-local.
+  """
+  @cache(policy: FunctionCachePolicy.Never)
+  shell(shell: String! = "zsh"): Container! {
+    if (!["zsh", "bash"].contains(shell)) { raise "shell must be zsh or bash" }
+    devContainer.terminal(cmd: ["bash", "/usr/local/share/devshell/entrypoint.sh", shell])
+  }
+
+  """
+  Export to the local image store; empty arches uses the configured architecture.
+  """
+  @cache(policy: FunctionCachePolicy.Never)
+  exportImage(name: String! = "", arches: [String!]! = []): Void {
+    let targets = if (arches.length == 0) { [targetArch(arch)] } else {
+      arches.map { a => targetArch(a) }
+    }
+    # Validate all targets before building. A repeated architecture is an input
+    # error rather than an ambiguous duplicate manifest in the exported image.
+    let seen: [String!]! = []
+    targets.each { a =>
+      if (seen.contains(a)) { raise `duplicate export architecture: ${a}` }
+      seen += [a]
+    }
+    let primary = targets[0]
+    let variants = targets.filter { a => a != primary }.map { a => build(a) }
+    build(primary).exportImage(
+      name: if (name == "") { imageName } else { name },
+      platformVariants: variants,
+    )
+    null
+  }
+
+  """
+  Check installed tools, account configuration, and both shell integrations.
+  """
+  @check
+  check: Void {
+    devContainer
+      .withFile("/tmp/devshell-check.sh", currentModule.source.file("tests/container.sh"))
+      .withExec(["bash", "/tmp/devshell-check.sh", targetArch(arch), `${userId}`, `${userGroupId20}`])
+      .sync
+    null
+  }
+}

@@ -1,0 +1,6 @@
+[tools]
+fzf = "latest"
+fd = "latest"
+eza = "latest"
+yazi = "latest"
+ripgrep = "latest"

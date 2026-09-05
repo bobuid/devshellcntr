@@ -1,0 +1,18 @@
+# devshell/default.compose.yml
+
+services:
+  xox-host:
+    image: ${DEVSHELL_IMAGE_NAME:-devshell}
+    container_name: ctnr-${DEVSHELL_CTNR_NAME:-devshell-0}
+    stdin_open: true
+    tty: true
+    # volumes:
+    #  - "../../../:/work/app"
+    #  # * can not be used <(cat ...)
+    # security_opt:
+      # - label=disable
+    # environment:
+    #  - SSH_AUTH_SOCK=/work/app/.bob/.ssh-agent.socket
+    # volumes:
+    #  - ${SSH_AUTH_SOCK}:/work/app/.bob/.ssh-agent.socket
+    # command: tail -f /dev/null

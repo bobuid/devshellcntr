@@ -1,0 +1,31 @@
+// .vscode/settings.json
+{
+  /* ---------- core VS Code settings ---------- */
+  "files": {
+    "autoSave": "onFocusChange",
+    "encoding": "utf8",
+    "eol": "\n",
+    /* ---------- final-newline support (requires EditorConfig extension) ---------- */
+    "insertFinalNewline": true
+  },
+  "editor": {
+    "formatOnSave": false,
+    "insertSpaces": true,
+    "tabSize": 2,
+    "trimAutoWhitespace": true
+  },
+  /* ---------- language-specific overrides ---------- */
+  "[shellscript]": {
+  },
+  "[markdown]": {
+    "editor.tabSize": 2,
+    "editor.trimAutoWhitespace": false   // keep trailing spaces in MD
+  },
+  "workbench": {
+    "colorTheme": "SynthWave84"
+  },
+  "antigravity": {
+    "marketplaceGalleryItemURL": "https://marketplace.visualstudio.com/items",
+    "marketplaceExtensionGalleryServiceURL": "https://marketplace.visualstudio.com/_apis/public/gallery"
+  }
+}

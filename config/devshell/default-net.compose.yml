@@ -1,0 +1,9 @@
+# devshell/default-net.compose.yml
+
+services:
+  xox-host:
+    ports:
+      - "${DEVSHELL_CTNR_PORT0:-45070}:${DEVSHELL_CTNR_PORT0:-45070}"
+      - "${DEVSHELL_CTNR_PORT1:-45071}:${DEVSHELL_CTNR_PORT1:-45071}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

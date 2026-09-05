@@ -1,0 +1,23 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+
+[*.{js,sh,md,json}]
+
+
+[*.{md,mdx,json,toml,yml,yaml,sh}]
+trim_trailing_whitespace = false
+
+[*.{ts,tsx,js,jsx}]
+trim_trailing_whitespace = true
+
+[*.{css}]
+trim_trailing_whitespace = true
+
+[CHANGELOG.md]
+indent_size = false
