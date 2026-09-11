@@ -12,9 +12,11 @@ devshell_append_block() {
 }
 
 mkdir -p "$HOME"
-devshell_append_block "$HOME/.bashrc" mise 'eval "$(mise activate bash)"
+devshell_append_block "$HOME/.bashrc" mise 'export PATH="$DEVSHELL_BIN:$HOME/.local/share/mise/shims:$PATH"
+eval "$(mise activate bash)"
 DEVSHELL_BASHRC_PID=$$'
-devshell_append_block "$HOME/.zshrc" mise 'eval "$(mise activate zsh)"'
+devshell_append_block "$HOME/.zshrc" mise 'export PATH="$DEVSHELL_BIN:$HOME/.local/share/mise/shims:$PATH"
+eval "$(mise activate zsh)"'
 devshell_append_block "$HOME/.zshrc" prompt 'autoload -Uz vcs_info
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd vcs_info
@@ -31,6 +33,9 @@ for devshell_candidate in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.prof
     break
   fi
 done
-devshell_append_block "$devshell_profile" bash-login 'if [ -n "${BASH_VERSION:-}" ] && [ "${DEVSHELL_BASHRC_PID:-}" != "$$" ]; then
-  case $- in *i*) [ ! -r "$HOME/.bashrc" ] || . "$HOME/.bashrc" ;; esac
+devshell_append_block "$devshell_profile" bash-login 'if [ -n "${BASH_VERSION:-}" ]; then
+  export PATH="$DEVSHELL_BIN:$HOME/.local/share/mise/shims:$PATH"
+  if [ "${DEVSHELL_BASHRC_PID:-}" != "$$" ]; then
+    case $- in *i*) [ ! -r "$HOME/.bashrc" ] || . "$HOME/.bashrc" ;; esac
+  fi
 fi'

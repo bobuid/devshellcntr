@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Dagger beta.11's Apple image loader drops the reference prefix returned by
+# `container image load`. Apple container 1.3 requires that full reference.
+# Only this known call shape is adapted; all other arguments pass unchanged.
+if [[ $# -eq 4 && "$1 $2" == 'image tag' && "$3" =~ ^[0-9a-f]{64}$ ]]; then
+  set -- image tag "untagged@sha256:$3" "$4"
+fi
+if [[ "${1:-}" == image && ( "${2:-}" == load || "${2:-}" == tag ) ]]; then
+  if "${DEVSHELL_APPLE_CONTAINER:?}" "$@"; then
+    exit 0
+  else
+    devshell_status=$?
+    if [[ -n "${DEVSHELL_APPLE_EXPORT_ERRORS:-}" ]]; then
+      printf 'Apple image %s failed (exit %s). See Dagger output for details.\n' \
+        "$2" "$devshell_status" >> "$DEVSHELL_APPLE_EXPORT_ERRORS"
+    fi
+    exit "$devshell_status"
+  fi
+fi
+exec "${DEVSHELL_APPLE_CONTAINER:?}" "$@"

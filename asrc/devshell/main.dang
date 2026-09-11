@@ -107,7 +107,8 @@ type Devshell {
       if (!pkg.containsMatch(`^[a-z0-9][a-z0-9+.-]*(:[a-z0-9]+)?(=[A-Za-z0-9.+:~_-]+)?$`)) {
         raise `invalid apt package: ${pkg}`
       }
-      !managed.contains(pkg.split("=")[0].split(":")[0])
+      let packageName = (pkg.split("=")[0] ?? "").split(":")[0] ?? ""
+      !managed.contains(packageName)
     }
     let env = container(platform: `linux/${selected}`)
       .from(baseImage)
@@ -181,12 +182,23 @@ type Devshell {
       if (seen.contains(a)) { raise `duplicate export architecture: ${a}` }
       seen += [a]
     }
-    let primary = targets[0]
+    let primary = targets[0] ?? targetArch(arch)
     let variants = targets.filter { a => a != primary }.map { a => build(a) }
+    let exportName = if (name == "") { imageName } else { name }
     build(primary).exportImage(
-      name: if (name == "") { imageName } else { name },
+      name: exportName,
       platformVariants: variants,
-    )
+    ) rescue {
+      # beta.11 exports successfully but its Dang runtime cannot decode the
+      # core Void scalar's {} response. Ignore only that post-export conversion
+      # error; other GraphQL/build failures still propagate to the caller.
+      err: RuntimeError => {
+        if (err.message != "cannot convert Go type map[string]interface {} to Dang Value") {
+          raise err
+        }
+        null
+      }
+    }
     null
   }
 

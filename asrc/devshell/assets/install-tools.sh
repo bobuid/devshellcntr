@@ -12,16 +12,15 @@ esac
 devshell_tmp=$(mktemp -d)
 trap 'rm -rf -- "$devshell_tmp"' EXIT
 
-# Bootstrap runs inside the selected Linux container, so eget's own architecture
-# detection follows the target even during an emulated cross-architecture build.
+# Select the same Linux architecture for the bootstrap even under emulation.
 curl -fsSL https://zyedidia.github.io/eget.sh -o "$devshell_tmp/eget.sh"
-(cd "$devshell_tmp" && bash ./eget.sh)
+(cd "$devshell_tmp" && GETEGET_PLATFORM="linux_$devshell_arch" bash ./eget.sh)
 install -m 0755 "$devshell_tmp/eget" "$DEVSHELL_BIN/eget"
 
 # The full suffix excludes musl archives and other compression formats. Restrict
 # extraction to mise itself so a future multi-binary archive cannot prompt.
 eget jdx/mise --asset "linux-${devshell_mise_arch}.tar.xz" \
-  --file mise --to "$DEVSHELL_BIN/mise" </dev/null
+  --file 'mise/bin/mise' --to "$DEVSHELL_BIN/mise" </dev/null
 mise --version
 
 # Additional inputs are repository identifiers, not arbitrary shell/eget flags.
